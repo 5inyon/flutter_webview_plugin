@@ -10,6 +10,9 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     NSString* _invalidUrlRegex;
     NSMutableSet* _javaScriptChannelNames;
     NSNumber*  _ignoreSSLErrors;
+    BOOL _keyboardHidden;
+    BOOL _oldKeyboardHidden;
+    CGPoint _offsetScrollPoint;
 }
 @end
 
@@ -29,6 +32,8 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     self = [super init];
     if (self) {
         self.viewController = viewController;
+        _oldKeyboardHidden = false;
+        _keyboardHidden = false;
     }
     return self;
 }
@@ -143,6 +148,9 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     self.webview.scrollView.showsHorizontalScrollIndicator = [scrollBar boolValue];
     self.webview.scrollView.showsVerticalScrollIndicator = [scrollBar boolValue];
     
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardWillAnimate:) name:UIKeyboardWillShowNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(keyboardWillAnimate:) name:UIKeyboardWillHideNotification object:nil];
+    
     [self.webview addObserver:self forKeyPath:@"estimatedProgress" options:NSKeyValueObservingOptionNew context:NULL];
 
     WKPreferences* preferences = [[self.webview configuration] preferences];
@@ -159,6 +167,15 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     [currentViewController.view addSubview:self.webview];
 
     [self navigate:call];
+}
+
+- (void)keyboardWillAnimate:(NSNotification *)notification {
+    if([notification name] == UIKeyboardWillShowNotification) {
+        _offsetScrollPoint = self.webview.scrollView.contentOffset;
+        _keyboardHidden = false;
+    } else if ([notification name] == UIKeyboardWillHideNotification) {
+        _keyboardHidden = true;
+    }
 }
 
 - (void)webView:(WKWebView *)webView didReceiveAuthenticationChallenge:(NSURLAuthenticationChallenge *)challenge completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler {
@@ -189,37 +206,42 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
 
     id yDirection = @{@"yDirection": @(scrollView.contentOffset.y) };
     [channel invokeMethod:@"onScrollYChanged" arguments:yDirection];
+    
+    if (_keyboardHidden == false) {
+        self.webview.scrollView.contentOffset = _offsetScrollPoint;
+        _oldKeyboardHidden = _keyboardHidden;
+    }
 }
 
 - (void)navigate:(FlutterMethodCall*)call {
     if (self.webview != nil) {
-            NSString *url = call.arguments[@"url"];
-            NSNumber *withLocalUrl = call.arguments[@"withLocalUrl"];
-            if ( [withLocalUrl boolValue]) {
-                NSURL *htmlUrl = [NSURL fileURLWithPath:url isDirectory:false];
-                NSString *localUrlScope = call.arguments[@"localUrlScope"];
-                if (@available(iOS 9.0, *)) {
-                    if(localUrlScope == nil) {
-                        [self.webview loadFileURL:htmlUrl allowingReadAccessToURL:htmlUrl];
-                    }
-                    else {
-                        NSURL *scopeUrl = [NSURL fileURLWithPath:localUrlScope];
-                        [self.webview loadFileURL:htmlUrl allowingReadAccessToURL:scopeUrl];
-                    }
-                } else {
-                    @throw @"not available on version earlier than ios 9.0";
+        NSString *url = call.arguments[@"url"];
+        NSNumber *withLocalUrl = call.arguments[@"withLocalUrl"];
+        if ( [withLocalUrl boolValue]) {
+            NSURL *htmlUrl = [NSURL fileURLWithPath:url isDirectory:false];
+            NSString *localUrlScope = call.arguments[@"localUrlScope"];
+            if (@available(iOS 9.0, *)) {
+                if(localUrlScope == nil) {
+                    [self.webview loadFileURL:htmlUrl allowingReadAccessToURL:htmlUrl];
+                }
+                else {
+                    NSURL *scopeUrl = [NSURL fileURLWithPath:localUrlScope];
+                    [self.webview loadFileURL:htmlUrl allowingReadAccessToURL:scopeUrl];
                 }
             } else {
-                NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
-                NSDictionary *headers = call.arguments[@"headers"];
-
-                if (headers != nil) {
-                    [request setAllHTTPHeaderFields:headers];
-                }
-
-                [self.webview loadRequest:request];
+                @throw @"not available on version earlier than ios 9.0";
             }
+        } else {
+            NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
+            NSDictionary *headers = call.arguments[@"headers"];
+
+            if (headers != nil) {
+                [request setAllHTTPHeaderFields:headers];
+            }
+
+            [self.webview loadRequest:request];
         }
+    }
 }
 
 - (void)evalJavascript:(FlutterMethodCall*)call
