@@ -473,6 +473,10 @@ class WebviewManager {
         close(null, null);
     }
 
+    void invalidUrlRegex(String regex) {
+        webViewClient.updateInvalidUrlRegex(regex);
+    }
+
     @TargetApi(Build.VERSION_CODES.KITKAT)
     void eval(MethodCall call, final MethodChannel.Result result) {
         String code = call.argument("code");

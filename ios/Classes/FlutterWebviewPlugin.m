@@ -84,6 +84,8 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
         [self onCanGoForward:call result:result];
     } else if ([@"cleanCache" isEqualToString:call.method]) {
         [self cleanCache:result];
+    } else if ([@"invalidUrlRegex" isEqualToString:call.method]) {
+        [self invalidUrlRegex:call];
     } else {
         result(FlutterMethodNotImplemented);
     }
@@ -384,6 +386,11 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     if (self.webview != nil) {
         [self.webview reload];
     }
+}
+
+- (void)invalidUrlRegex:(FlutterMethodCall*)call {
+    NSString *regex = call.arguments[@"regex"];
+    _invalidUrlRegex = regex;
 }
 
 - (bool)checkInvalidUrl:(NSURL*)url {

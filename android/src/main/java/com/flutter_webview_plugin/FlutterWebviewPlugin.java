@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Point;
+import android.text.TextUtils;
 import android.view.Display;
 import android.webkit.WebStorage;
 import android.widget.FrameLayout;
@@ -93,6 +94,9 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
                 break;
             case "cleanCache":
                 cleanCache(result);
+                break;
+            case "invalidUrlRegex":
+                invalidUrlRegex(call, result);
                 break;
             default:
                 result.notImplemented();
@@ -309,6 +313,16 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
         } else {
             CookieManager.getInstance().removeAllCookie();
         }
+        result.success(null);
+    }
+
+    private void invalidUrlRegex(MethodCall call, MethodChannel.Result result) {
+        String regex = call.argument("regex");
+
+        if (!TextUtils.isEmpty(regex)) {
+            webViewManager.invalidUrlRegex(regex);
+        }
+
         result.success(null);
     }
 
