@@ -146,6 +146,7 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     self.webview.UIDelegate = self;
     self.webview.navigationDelegate = self;
     self.webview.scrollView.delegate = self;
+    self.webview.allowsBackForwardNavigationGestures = true;
     self.webview.hidden = [hidden boolValue];
     self.webview.scrollView.showsHorizontalScrollIndicator = [scrollBar boolValue];
     self.webview.scrollView.showsVerticalScrollIndicator = [scrollBar boolValue];
@@ -291,14 +292,21 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
 - (void)reloadUrl:(FlutterMethodCall*)call {
     if (self.webview != nil) {
 		NSString *url = call.arguments[@"url"];
-		NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
-        NSDictionary *headers = call.arguments[@"headers"];
+        NSRange range = [url rangeOfString:@"<!DOCTYPE html>"];
         
-        if (headers != nil) {
-            [request setAllHTTPHeaderFields:headers];
+        if (range.location == NSNotFound) {
+            NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
+            NSDictionary *headers = call.arguments[@"headers"];
+            
+            if (headers != nil) {
+                [request setAllHTTPHeaderFields:headers];
+            }
+            
+            [self.webview loadRequest:request];
+        } else {
+            url = [url stringByReplacingOccurrencesOfString:@"data:text/html;charset=utf-8" withString:@""];
+            [self.webview loadHTMLString:url baseURL:nil];
         }
-        
-        [self.webview loadRequest:request];
     }
 }
 
@@ -433,7 +441,7 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
          [webView.URL.scheme isEqualToString:@"https"] ||
          [webView.URL.scheme isEqualToString:@"about"] ||
          [webView.URL.scheme isEqualToString:@"file"])) {
-         if (isInvalid) {
+         if (isInvalid && ![navigationAction.request.URL.absoluteString isEqualToString:@"about:blank"]) {
             decisionHandler(WKNavigationActionPolicyCancel);
          } else {
             decisionHandler(WKNavigationActionPolicyAllow);
@@ -465,6 +473,11 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     [channel invokeMethod:@"onState" arguments:@{@"type": @"finishLoad", @"url": webView.URL.absoluteString}];
+    if ([webView.URL.path isEqualToString:@"/"]) {
+        webView.allowsBackForwardNavigationGestures = false;
+    } else {
+        webView.allowsBackForwardNavigationGestures = true;
+    }
 }
 
 - (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
